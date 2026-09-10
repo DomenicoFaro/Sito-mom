@@ -20,9 +20,11 @@ const STATUS_COLOR: Record<TableStatus, string> = {
 };
 
 export function TablesAdmin({ tables }: { tables: RestaurantTable[] }) {
-  const [origin] = useState(() =>
-    typeof window !== "undefined" ? window.location.origin : ""
-  );
+  const [origin] = useState(() => {
+    const fixed = process.env.NEXT_PUBLIC_SITE_URL;
+    if (fixed) return fixed.replace(/\/$/, "");
+    return typeof window !== "undefined" ? window.location.origin : "";
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-5 py-8 sm:px-8">
