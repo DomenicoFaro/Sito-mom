@@ -62,6 +62,8 @@ export interface Order {
   status: OrderStatus;
   menu_mode: MenuType;
   guest_count: number;
+  ayce_price_cents: number;
+  ayce_cover_cents: number;
   created_at: string;
   closed_at: string | null;
 }

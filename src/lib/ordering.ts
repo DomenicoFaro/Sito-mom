@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentAyceRate } from "@/lib/ayce";
 import type { MenuType, Order, RestaurantTable } from "@/lib/types";
 
 export type ResolveResult =
@@ -38,9 +39,17 @@ export async function resolveTableAndOrder(
     return { ok: true, table, order: existingOrder as Order };
   }
 
+  const rate = getCurrentAyceRate();
   const { data: newOrder, error } = await supabase
     .from("orders")
-    .insert({ table_id: table.id, status: "aperto", menu_mode: "ayce" as MenuType })
+    .insert({
+      table_id: table.id,
+      status: "aperto",
+      menu_mode: "ayce" as MenuType,
+      guest_count: table.seats,
+      ayce_price_cents: rate.priceCents,
+      ayce_cover_cents: rate.coverCents,
+    })
     .select("*")
     .single();
 

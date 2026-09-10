@@ -99,9 +99,12 @@ export function OrderingApp({
     return sum + unit * l.quantity;
   }, 0);
 
-  const orderTotal = orderItems
+  const itemsTotal = orderItems
     .filter((i) => i.status !== "annullato")
     .reduce((sum, i) => sum + i.unit_price_cents * i.quantity, 0);
+
+  const ayceTotal = (order.ayce_price_cents + order.ayce_cover_cents) * order.guest_count;
+  const orderTotal = ayceTotal + itemsTotal;
 
   const rounds = useMemo(() => {
     const map = new Map<number, OrderItem[]>();
@@ -276,23 +279,42 @@ export function OrderingApp({
             ))}
           </div>
 
-          {orderItems.length > 0 && (
-            <div className="mt-10 border-t border-line/70 pt-5">
-              <div className="flex justify-between text-sm text-ink-dim">
-                <span>Totale ordine</span>
-                <span className="text-gold">{formatPrice(orderTotal)}</span>
+          <div className="mt-10 border-t border-line/70 pt-5">
+            <div className="space-y-1.5 text-sm text-ink-dim">
+              <div className="flex justify-between">
+                <span>
+                  Formula All You Can Eat × {order.guest_count}{" "}
+                  {order.guest_count === 1 ? "persona" : "persone"}
+                </span>
+                <span>{formatPrice(order.ayce_price_cents * order.guest_count)}</span>
               </div>
-              {!orderClosed && !awaitingBill && (
-                <button
-                  onClick={handleRequestBill}
-                  disabled={pending}
-                  className="mt-5 w-full rounded-full border border-line py-3.5 text-sm font-medium tracking-wide text-ink transition hover:border-gold hover:text-gold disabled:opacity-60"
-                >
-                  Richiedi il conto
-                </button>
+              {order.ayce_cover_cents > 0 && (
+                <div className="flex justify-between">
+                  <span>Coperto × {order.guest_count}</span>
+                  <span>{formatPrice(order.ayce_cover_cents * order.guest_count)}</span>
+                </div>
+              )}
+              {itemsTotal > 0 && (
+                <div className="flex justify-between">
+                  <span>Piatti extra e bevande</span>
+                  <span>{formatPrice(itemsTotal)}</span>
+                </div>
               )}
             </div>
-          )}
+            <div className="mt-3 flex justify-between border-t border-line/70 pt-3 text-sm">
+              <span className="text-ink-dim">Totale ordine</span>
+              <span className="text-lg text-gold">{formatPrice(orderTotal)}</span>
+            </div>
+            {!orderClosed && !awaitingBill && (
+              <button
+                onClick={handleRequestBill}
+                disabled={pending}
+                className="mt-5 w-full rounded-full border border-line py-3.5 text-sm font-medium tracking-wide text-ink transition hover:border-gold hover:text-gold disabled:opacity-60"
+              >
+                Richiedi il conto
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -327,11 +349,13 @@ export function OrderingApp({
                       <div>
                         <p className="text-sm font-medium">{line.item.name}</p>
                         <p className="mt-0.5 text-xs text-gold">
-                          {formatPrice(
-                            (order.menu_mode === "ayce"
-                              ? line.item.price_cents + line.item.ayce_surcharge_cents
-                              : line.item.price_cents) * line.quantity
-                          )}
+                          {(() => {
+                            const unit =
+                              order.menu_mode === "ayce"
+                                ? line.item.price_cents + line.item.ayce_surcharge_cents
+                                : line.item.price_cents;
+                            return unit > 0 ? formatPrice(unit * line.quantity) : "Incluso";
+                          })()}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -455,7 +479,9 @@ function ItemRow({
           <p className="mt-0.5 line-clamp-2 text-xs text-ink-dim">{item.description}</p>
         </div>
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-sm text-gold">{formatPrice(unitPrice)}</span>
+          <span className="text-sm text-gold">
+            {unitPrice > 0 ? formatPrice(unitPrice) : "Incluso"}
+          </span>
           <div className="flex items-center gap-3">
             {quantity > 0 && (
               <>

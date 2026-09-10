@@ -27,9 +27,11 @@ const STATUS_COLOR: Record<TableStatus, string> = {
 };
 
 function orderTotal(order: OrderWithItems) {
-  return order.order_items
+  const itemsTotal = order.order_items
     .filter((i) => i.status !== "annullato")
     .reduce((sum, i) => sum + i.unit_price_cents * i.quantity, 0);
+  const ayceTotal = (order.ayce_price_cents + order.ayce_cover_cents) * order.guest_count;
+  return itemsTotal + ayceTotal;
 }
 
 export function CassaBoard({
@@ -204,6 +206,20 @@ function TableDetail({
 
         {order && (
           <div className="sticky bottom-0 border-t border-line/70 bg-abyss-soft px-5 py-4">
+            <div className="mb-2 space-y-1 text-xs text-ink-dim">
+              <div className="flex justify-between">
+                <span>
+                  AYCE × {order.guest_count} {order.guest_count === 1 ? "persona" : "persone"}
+                </span>
+                <span>{formatPrice(order.ayce_price_cents * order.guest_count)}</span>
+              </div>
+              {order.ayce_cover_cents > 0 && (
+                <div className="flex justify-between">
+                  <span>Coperto × {order.guest_count}</span>
+                  <span>{formatPrice(order.ayce_cover_cents * order.guest_count)}</span>
+                </div>
+              )}
+            </div>
             <div className="mb-4 flex justify-between text-sm">
               <span className="text-ink-dim">Totale conto</span>
               <span className="text-lg text-gold">{formatPrice(orderTotal(order))}</span>
