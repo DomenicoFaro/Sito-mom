@@ -162,6 +162,11 @@ function TableDetail({
         </div>
 
         <div className="space-y-6 px-5 py-5">
+          {order?.status === "in_attesa_conto" && (
+            <div className="rounded-lg border border-lacquer/50 bg-lacquer/10 px-4 py-3 text-sm text-lacquer-bright">
+              Il cliente ha richiesto il conto.
+            </div>
+          )}
           {!order && <p className="text-ink-dim">Nessun ordine attivo per questo tavolo.</p>}
 
           {[...rounds.entries()]

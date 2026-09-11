@@ -8,6 +8,7 @@ import type { MenuItem, OrderItem, OrderItemStatus } from "@/lib/types";
 
 const ACTIVE_STATUSES: OrderItemStatus[] = ["ricevuto", "in_preparazione", "pronto"];
 const LATE_THRESHOLD_MS = 12 * 60 * 1000;
+const AUTO_DISMISS_MS = 8000;
 
 const NEXT_STATUS: Partial<Record<OrderItemStatus, OrderItemStatus>> = {
   ricevuto: "in_preparazione",
@@ -34,6 +35,8 @@ export function KitchenBoard({
   const [items, setItems] = useState<OrderItem[]>(initialItems);
   const [tableByOrder, setTableByOrder] = useState(initialTableByOrder);
   const [now, setNow] = useState(() => Date.now());
+  const [dismissedOrders, setDismissedOrders] = useState<Set<string>>(new Set());
+  const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const supabase = useRef(createClient());
 
   const menuById = useMemo(() => new Map(menuItems.map((m) => [m.id, m])), [menuItems]);
@@ -87,7 +90,15 @@ export function KitchenBoard({
     };
   }, []);
 
-  const groups = useMemo(() => {
+  useEffect(() => {
+    const timers = dismissTimers.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
+    };
+  }, []);
+
+  const rawGroups = useMemo(() => {
     const map = new Map<string, OrderItem[]>();
     for (const item of items) {
       if (!ACTIVE_STATUSES.includes(item.status)) continue;
@@ -104,6 +115,50 @@ export function KitchenBoard({
       }))
       .sort((a, b) => a.earliest - b.earliest);
   }, [items, tableByOrder]);
+
+  // Quando tutti i piatti di un tavolo sono "Pronto", il riquadro sparisce
+  // da solo dopo qualche secondo invece di restare finché sala/cassa non
+  // segna il servito: la cucina ha finito il suo lavoro su quel giro.
+  useEffect(() => {
+    const timers = dismissTimers.current;
+    const activeOrderIds = new Set(rawGroups.map((g) => g.orderId));
+
+    for (const group of rawGroups) {
+      const allReady = group.items.every((i) => i.status === "pronto");
+      if (allReady) {
+        if (!timers.has(group.orderId)) {
+          const timer = setTimeout(() => {
+            setDismissedOrders((prev) => new Set(prev).add(group.orderId));
+            timers.delete(group.orderId);
+          }, AUTO_DISMISS_MS);
+          timers.set(group.orderId, timer);
+        }
+      } else {
+        if (timers.has(group.orderId)) {
+          clearTimeout(timers.get(group.orderId));
+          timers.delete(group.orderId);
+        }
+        setDismissedOrders((prev) => {
+          if (!prev.has(group.orderId)) return prev;
+          const next = new Set(prev);
+          next.delete(group.orderId);
+          return next;
+        });
+      }
+    }
+
+    for (const orderId of timers.keys()) {
+      if (!activeOrderIds.has(orderId)) {
+        clearTimeout(timers.get(orderId));
+        timers.delete(orderId);
+      }
+    }
+  }, [rawGroups]);
+
+  const groups = useMemo(
+    () => rawGroups.filter((g) => !dismissedOrders.has(g.orderId)),
+    [rawGroups, dismissedOrders]
+  );
 
   async function advance(item: OrderItem) {
     const next = NEXT_STATUS[item.status];
