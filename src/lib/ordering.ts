@@ -58,10 +58,7 @@ export async function resolveTableAndOrder(
   }
 
   if (table.status === "libero") {
-    await supabase
-      .from("restaurant_tables")
-      .update({ status: "occupato" })
-      .eq("id", table.id);
+    await supabase.rpc("mark_table_occupied", { p_table_id: table.id });
   }
 
   return { ok: true, table, order: newOrder as Order };

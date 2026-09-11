@@ -95,17 +95,12 @@ export async function requestBill(
 ): Promise<SubmitResult> {
   const supabase = await createClient();
 
-  const { error: orderError } = await supabase
-    .from("orders")
-    .update({ status: "in_attesa_conto" })
-    .eq("id", orderId);
+  const { error } = await supabase.rpc("request_bill", {
+    p_order_id: orderId,
+    p_table_id: tableId,
+  });
 
-  const { error: tableError } = await supabase
-    .from("restaurant_tables")
-    .update({ status: "in_attesa_conto" })
-    .eq("id", tableId);
-
-  if (orderError || tableError) {
+  if (error) {
     return { ok: false, error: "Impossibile richiedere il conto. Chiedi al personale." };
   }
 
