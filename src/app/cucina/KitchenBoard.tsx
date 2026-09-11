@@ -35,14 +35,13 @@ export function KitchenBoard({
   const [items, setItems] = useState<OrderItem[]>(initialItems);
   const [tableByOrder, setTableByOrder] = useState(initialTableByOrder);
   const [now, setNow] = useState(() => Date.now());
-  const [dismissedOrders, setDismissedOrders] = useState<Set<string>>(new Set());
-  const dismissTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const readyAt = useRef<Map<string, number>>(new Map());
   const supabase = useRef(createClient());
 
   const menuById = useMemo(() => new Map(menuItems.map((m) => [m.id, m])), [menuItems]);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 20000);
+    const t = setInterval(() => setNow(Date.now()), 2000);
     return () => clearInterval(t);
   }, []);
 
@@ -90,14 +89,6 @@ export function KitchenBoard({
     };
   }, []);
 
-  useEffect(() => {
-    const timers = dismissTimers.current;
-    return () => {
-      timers.forEach((t) => clearTimeout(t));
-      timers.clear();
-    };
-  }, []);
-
   const rawGroups = useMemo(() => {
     const map = new Map<string, OrderItem[]>();
     for (const item of items) {
@@ -119,46 +110,28 @@ export function KitchenBoard({
   // Quando tutti i piatti di un tavolo sono "Pronto", il riquadro sparisce
   // da solo dopo qualche secondo invece di restare finché sala/cassa non
   // segna il servito: la cucina ha finito il suo lavoro su quel giro.
-  useEffect(() => {
-    const timers = dismissTimers.current;
-    const activeOrderIds = new Set(rawGroups.map((g) => g.orderId));
-
-    for (const group of rawGroups) {
-      const allReady = group.items.every((i) => i.status === "pronto");
-      if (allReady) {
-        if (!timers.has(group.orderId)) {
-          const timer = setTimeout(() => {
-            setDismissedOrders((prev) => new Set(prev).add(group.orderId));
-            timers.delete(group.orderId);
-          }, AUTO_DISMISS_MS);
-          timers.set(group.orderId, timer);
-        }
-      } else {
-        if (timers.has(group.orderId)) {
-          clearTimeout(timers.get(group.orderId));
-          timers.delete(group.orderId);
-        }
-        setDismissedOrders((prev) => {
-          if (!prev.has(group.orderId)) return prev;
-          const next = new Set(prev);
-          next.delete(group.orderId);
-          return next;
-        });
+  // `readyAt` traccia il momento in cui ogni ordine è diventato "tutto
+  // pronto"; il tick di `now` ogni 2s rivaluta chi ha superato la soglia.
+  for (const group of rawGroups) {
+    const allReady = group.items.every((i) => i.status === "pronto");
+    if (allReady) {
+      if (!readyAt.current.has(group.orderId)) {
+        readyAt.current.set(group.orderId, Date.now());
       }
+    } else {
+      readyAt.current.delete(group.orderId);
     }
-
-    for (const orderId of timers.keys()) {
-      if (!activeOrderIds.has(orderId)) {
-        clearTimeout(timers.get(orderId));
-        timers.delete(orderId);
-      }
+  }
+  for (const orderId of [...readyAt.current.keys()]) {
+    if (!rawGroups.some((g) => g.orderId === orderId)) {
+      readyAt.current.delete(orderId);
     }
-  }, [rawGroups]);
+  }
 
-  const groups = useMemo(
-    () => rawGroups.filter((g) => !dismissedOrders.has(g.orderId)),
-    [rawGroups, dismissedOrders]
-  );
+  const groups = rawGroups.filter((g) => {
+    const readySince = readyAt.current.get(g.orderId);
+    return !readySince || now - readySince < AUTO_DISMISS_MS;
+  });
 
   async function advance(item: OrderItem) {
     const next = NEXT_STATUS[item.status];
